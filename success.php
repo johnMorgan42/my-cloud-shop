@@ -197,7 +197,7 @@
             <p>Your account has been created and verified. Welcome to the community!</p>
 
             <div class="button-group">
-                <a href="index.html" class="btn btn-primary">Go to Home</a>
+                <a href="index.php" class="btn btn-primary">Go to Home</a>
                 <a href="register.php" class="btn btn-secondary">Register Another</a>
             </div>
         </div>
