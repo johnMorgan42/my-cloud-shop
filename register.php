@@ -212,7 +212,7 @@
 <body>
 
     <header class="top-nav">
-        <a href="index.html" class="logo">MyShop.</a>
+        <a href="index.php" class="logo">MyShop.</a>
     </header>
 
     <main class="main-wrapper">
@@ -249,7 +249,7 @@
             </form>
 
             <div class="back-link-wrapper">
-                <a href="index.html" class="back-link">&larr; Back to Home</a>
+                <a href="index.php" class="back-link">&larr; Back to Home</a>
             </div>
         </div>
     </main>
