@@ -1,99 +1,74 @@
 <?php
 declare(strict_types=1);
 
-// Start session if you intend to store user data or flash messages
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-// Redirect direct GET access
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header("Location: register.html");
+    header("Location: register.php");
     exit();
 }
 
-// Helper redirect function
 function redirect_with_error(string $message): void {
-    header("Location: register.html?error=" . urlencode($message));
+    header("Location: register.php?error=" . urlencode($message));
     exit();
 }
 
-// Sanitize & capture inputs
+// 1. Check if the Microsoft SQLSRV driver is even installed in this PHP environment
+if (!function_exists('sqlsrv_connect')) {
+    redirect_with_error("Driver Error: The PHP 'sqlsrv' extension is not installed or enabled.");
+}
+
 $name     = trim((string)($_POST['name'] ?? ''));
 $email    = trim((string)($_POST['email'] ?? ''));
 $password = (string)($_POST['password'] ?? '');
 
-// Validation
 if ($name === '' || $email === '' || $password === '') {
     redirect_with_error("Please fill in all required fields.");
 }
 
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    redirect_with_error("Please provide a valid email address.");
-}
-
-if (strlen($password) < 8) {
-    redirect_with_error("Password must be at least 8 characters long.");
-}
-
-// Database configuration
-// Best practice: Use getenv() or an external config file outside web root
-$serverName = getenv('DB_SERVER') ?: "tcp:mycardiffmet.database.windows.net,1433";
+// 2. REPLACE THESE WITH YOUR REAL AZURE SQL DETAILS
+$serverName = "tcp:mycardiffmet.database.windows.net,1433";
 $connectionOptions = [
-    "Database"               => getenv('DB_NAME') ?: "myDatabase",
-    "Uid"                    => getenv('DB_USER') ?: "myadmin",
-    "PWD"                    => getenv('DB_PASS') ?: "Abcdefgh0!",
+    "Database"               => "myDatabase",
+    "Uid"                    => "myadmin",
+    "PWD"                    => "Abcdefgh0!",
     "Encrypt"                => 1,
     "TrustServerCertificate" => 0,
-    "CharacterSet"           => "UTF-8"
+    "CharacterSet"           => "UTF-8",
+    "LoginTimeout"           => 10
 ];
 
-// Connect to Azure SQL Database
 $conn = sqlsrv_connect($serverName, $connectionOptions);
 
 if ($conn === false) {
-    // Log the actual system errors securely on the server
-    error_log("DB Connection Failure: " . print_r(sqlsrv_errors(), true));
-    
-    // Return a safe, generic message to the client
-    redirect_with_error("Unable to connect to the service. Please try again shortly.");
+    $errors = sqlsrv_errors();
+    $msg = "DB Connection Failed: ";
+    if ($errors !== null) {
+        foreach ($errors as $error) {
+            $msg .= "[" . $error['SQLSTATE'] . "] " . $error['message'] . " ";
+        }
+    }
+    redirect_with_error($msg);
 }
 
-// Check if user already exists
-$checkSql = "SELECT id FROM shopusers WHERE email = ?";
-$checkParams = [$email];
-$checkStmt = sqlsrv_query($conn, $checkSql, $checkParams);
-
-if ($checkStmt && sqlsrv_has_rows($checkStmt)) {
-    sqlsrv_free_stmt($checkStmt);
-    sqlsrv_close($conn);
-    redirect_with_error("An account with that email already exists.");
-}
-
-if ($checkStmt) {
-    sqlsrv_free_stmt($checkStmt);
-}
-
-// Hash password with strong default (bcrypt / argon2 depending on PHP runtime)
 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
-// Parameterized Insert
-$insertSql = "INSERT INTO shopusers (name, email, password) VALUES (?, ?, ?)";
-$insertParams = [$name, $email, $hashed_password];
-$insertStmt = sqlsrv_query($conn, $insertSql, $insertParams);
+$sql = "INSERT INTO shopusers (name, email, password) VALUES (?, ?, ?)";
+$params = [$name, $email, $hashed_password];
+$stmt = sqlsrv_query($conn, $sql, $params);
 
-if ($insertStmt === false) {
-    // Log real SQL errors server-side
-    error_log("DB Insert Error: " . print_r(sqlsrv_errors(), true));
-    
+if ($stmt === false) {
+    $errors = sqlsrv_errors();
+    $msg = "SQL Insert Failed: ";
+    if ($errors !== null) {
+        foreach ($errors as $error) {
+            $msg .= "[" . $error['SQLSTATE'] . "] " . $error['message'] . " ";
+        }
+    }
     sqlsrv_close($conn);
-    redirect_with_error("Registration failed due to a server error. Please try again.");
+    redirect_with_error($msg);
 }
 
-// Cleanup resources
-sqlsrv_free_stmt($insertStmt);
+sqlsrv_free_stmt($stmt);
 sqlsrv_close($conn);
 
-// Redirect to success page
 header("Location: success.php");
 exit();
