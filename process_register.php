@@ -25,7 +25,7 @@ if ($name === '' || $email === '' || $password === '') {
 }
 
 // 2. REPLACE THESE WITH YOUR REAL AZURE SQL DETAILS
-$serverName = "tcp:mycardiffmet.database.windows.net,1433";
+$serverName = "tcp:st20299011cardiffmet.database.windows.net,1433";
 $connectionOptions = [
     "Database"               => "myDatabase",
     "Uid"                    => "myadmin",
