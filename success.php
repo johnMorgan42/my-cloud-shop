@@ -182,7 +182,7 @@
 <body>
 
     <header class="top-nav">
-        <a href="index.html" class="logo">MyShop.</a>
+        <a href="index.php" class="logo">MyShop.</a>
     </header>
 
     <main class="main-wrapper">
