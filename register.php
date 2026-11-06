@@ -229,7 +229,7 @@
                 </div>
             <?php endif; ?>
 
-            <form method="post" action="process_register.php" novalidate autocomplete="on">
+            <form method="post" action="process register.php" novalidate autocomplete="on">
                 <div class="form-group">
                     <label for="name">Full Name *</label>
                     <input type="text" id="name" name="name" placeholder="Jane Doe" required autofocus>
