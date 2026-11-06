@@ -1,68 +1,99 @@
-<?php 
-// Simple database connection 
-$serverName = "tcp:mycardiffmet.database.windows.net,1433"; $connectionOptions = array( 
-"Database" => "myDatabase", 
-"Uid" => "myadmin", 
-"PWD" => "Abcdefgh0!", 
-"Encrypt" => 1, 
-"TrustServerCertificate" => 0 
-); 
-// Process form submission if ($_SERVER[’REQUEST_METHOD’] == 
-’POST’) { 
-$name = $_POST[’name’]; 
-$email = $_POST[’email’]; 
-$password = $_POST[’password’]; 
-// Basic validation if (!empty($name) && !empty($email) && !empty($password)) { 
-// Connect to database 
-$conn = sqlsrv_connect($serverName, $connectionOptions); 
-if ($conn) { 
-// Hash password 
-$hashed_password = password_hash($password, 
-PASSWORD_DEFAULT); 
-// Insert into database 
-$sql = "INSERT INTO shopusers (name, email, password) 
-VALUES (?, ?, ?)"; 
-$params = array($name, $email, $hashed_password); $stmt = 
-sqlsrv_query($conn, $sql, $params); 
-if ($stmt) { 
-// Redirect to success page header("Location: 
-success.php"); exit(); 
-} else { 
-// Get detailed error information 
-11 
-Listing 3: Backend Processor - process register.php 
- 3.4 Success Page - success.php 
-1 
-$errors = sqlsrv_errors(); 
-$error_message = "Database error: "; if ($errors != 
-null) { foreach ($errors as $error) { 
-$error_message .= "SQLSTATE: " . $error[’ SQLSTATE’] . ", "; 
-$error_message .= "Code: " . $error[’code’] . " , "; 
-$error_message .= "Message: " . $error[’message 
-’]; 
-} 
-} 
-// Redirect back with detailed error 
-header("Location: register.html?error=" . urlencode( 
-$error_message)); 
-exit(); 
-} 
-sqlsrv_free_stmt($stmt); sqlsrv_close($conn); 
-} else { 
-$connection_errors = sqlsrv_errors(); 
-$conn_error_message = "Database connection failed: "; if ($connection_errors != 
-null) { foreach ($connection_errors as $error) { 
-$conn_error_message .= $error[’message’]; 
-} 
-} 
-header("Location: register.html?error=" . urlencode( 
-$conn_error_message)); exit(); 
-} 
-} else { 
-header("Location: register.html?error=Please+fill+all+fields"); exit(); 
-} 
-} else { 
-// If someone tries to access this page directly header("Location: 
-register.html"); exit(); 
-} 
-?>
+<?php
+declare(strict_types=1);
+
+// Start session if you intend to store user data or flash messages
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Redirect direct GET access
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header("Location: register.html");
+    exit();
+}
+
+// Helper redirect function
+function redirect_with_error(string $message): void {
+    header("Location: register.html?error=" . urlencode($message));
+    exit();
+}
+
+// Sanitize & capture inputs
+$name     = trim((string)($_POST['name'] ?? ''));
+$email    = trim((string)($_POST['email'] ?? ''));
+$password = (string)($_POST['password'] ?? '');
+
+// Validation
+if ($name === '' || $email === '' || $password === '') {
+    redirect_with_error("Please fill in all required fields.");
+}
+
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    redirect_with_error("Please provide a valid email address.");
+}
+
+if (strlen($password) < 8) {
+    redirect_with_error("Password must be at least 8 characters long.");
+}
+
+// Database configuration
+// Best practice: Use getenv() or an external config file outside web root
+$serverName = getenv('DB_SERVER') ?: "tcp:mycardiffmet.database.windows.net,1433";
+$connectionOptions = [
+    "Database"               => getenv('DB_NAME') ?: "myDatabase",
+    "Uid"                    => getenv('DB_USER') ?: "myadmin",
+    "PWD"                    => getenv('DB_PASS') ?: "Abcdefgh0!",
+    "Encrypt"                => 1,
+    "TrustServerCertificate" => 0,
+    "CharacterSet"           => "UTF-8"
+];
+
+// Connect to Azure SQL Database
+$conn = sqlsrv_connect($serverName, $connectionOptions);
+
+if ($conn === false) {
+    // Log the actual system errors securely on the server
+    error_log("DB Connection Failure: " . print_r(sqlsrv_errors(), true));
+    
+    // Return a safe, generic message to the client
+    redirect_with_error("Unable to connect to the service. Please try again shortly.");
+}
+
+// Check if user already exists
+$checkSql = "SELECT id FROM shopusers WHERE email = ?";
+$checkParams = [$email];
+$checkStmt = sqlsrv_query($conn, $checkSql, $checkParams);
+
+if ($checkStmt && sqlsrv_has_rows($checkStmt)) {
+    sqlsrv_free_stmt($checkStmt);
+    sqlsrv_close($conn);
+    redirect_with_error("An account with that email already exists.");
+}
+
+if ($checkStmt) {
+    sqlsrv_free_stmt($checkStmt);
+}
+
+// Hash password with strong default (bcrypt / argon2 depending on PHP runtime)
+$hashed_password = password_hash($password, PASSWORD_DEFAULT);
+
+// Parameterized Insert
+$insertSql = "INSERT INTO shopusers (name, email, password) VALUES (?, ?, ?)";
+$insertParams = [$name, $email, $hashed_password];
+$insertStmt = sqlsrv_query($conn, $insertSql, $insertParams);
+
+if ($insertStmt === false) {
+    // Log real SQL errors server-side
+    error_log("DB Insert Error: " . print_r(sqlsrv_errors(), true));
+    
+    sqlsrv_close($conn);
+    redirect_with_error("Registration failed due to a server error. Please try again.");
+}
+
+// Cleanup resources
+sqlsrv_free_stmt($insertStmt);
+sqlsrv_close($conn);
+
+// Redirect to success page
+header("Location: success.php");
+exit();
